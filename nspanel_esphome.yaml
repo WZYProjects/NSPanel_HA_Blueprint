@@ -25,6 +25,7 @@ wifi:
 ##### ESPHOME CONFIGURATION #####
 esphome:
   name: ${device_name}
+  friendly_name: ${friendly_name}
   min_version: 2023.5.0
 
 ##### TYPE OF ESP BOARD #####
@@ -92,12 +93,12 @@ time:
 ##### START - BUTTON CONFIGURATION #####
 button:
   ###### REBOOT BUTTON #####
-  - name: ${device_name} Restart
+  - name: Restart
     platform: restart
     id: restart_nspanel
 
   ##### UPDATE TFT DISPLAY #####
-  - name: ${device_name} Update TFT display
+  - name: Update TFT display
     platform: template
     icon: mdi:file-sync
     id: tft_update
@@ -111,7 +112,7 @@ button:
       - lambda: id(disp1).upload_tft();
 
   ##### EXIT REPARSE TFT DISPLAY #####
-  - name: ${device_name} Exit reparse
+  - name: Exit reparse
     platform: template
     icon: mdi:file-sync
     id: tft_reparse_off
@@ -878,7 +879,7 @@ globals:
 binary_sensor:
 
   ###### LEFT BUTTON BELOW DISPLAY TO TOGGLE RELAY#####
-  - name: ${device_name} Left Button
+  - name: Left Button
     platform: gpio
     id: left_button
     pin:
@@ -919,7 +920,7 @@ binary_sensor:
               command: "short_click"
 
   ##### RIGHT BUTTON BELOW DISPLAY TO TOGGLE RELAY #####
-  - name: ${device_name} Right Button
+  - name: Right Button
     platform: gpio
     id: right_button
     pin:
@@ -958,7 +959,7 @@ binary_sensor:
               command: "short_click"
 
   ##### Restart NSPanel Button - Setting Page #####
-  - name: ${device_name} Restart
+  - name: Restart
     platform: nextion
     page_id: 7
     component_id: 9
@@ -967,7 +968,7 @@ binary_sensor:
       - button.press: restart_nspanel
 
   ##### Restart NSPanel Button - Boot Page #####
-  - name: ${device_name} Restart
+  - name: Restart
     platform: nextion
     page_id: 8
     component_id: 4
@@ -976,7 +977,7 @@ binary_sensor:
       - button.press: restart_nspanel
 
   ## Delays initial info from HA to the display #####
-  - name: ${device_name} Nextion display
+  - name: Nextion display
     id: nextion_init
     platform: template
     device_class: connectivity
@@ -985,7 +986,7 @@ binary_sensor:
     icon: mdi:tablet-dashboard
 
   ##### API connection status
-  - name: ${device_name} Status
+  - name: Status
     platform: status
     id: api_status
     on_state:
@@ -995,6 +996,12 @@ binary_sensor:
 
 ##### START - SENSOR CONFIGURATION #####
 sensor:
+
+  ##### ESP32 Chip temperature #####
+  - name: ESP32 temperature
+    platform: internal_temperature
+    entity_category: diagnostic
+    disabled_by_default: True
 
   ##### touchevent sensor, Reset the page timeout #####
   - id: touchevent
@@ -1008,12 +1015,33 @@ sensor:
             id(timer_reset_all).execute(id(current_page).state.c_str());
 
   ##### Uptime Sensors #####
-  - name: ${device_name} Uptime seconds
+  - name: Uptime seconds
     id: uptime_sec
     platform: uptime
     internal: true
+    on_raw_value:
+      then:
+        - text_sensor.template.publish:
+            id: nspanel_uptime
+            state: !lambda |-
+              int seconds = round(id(uptime_sec).raw_state);
+              int days = seconds / (24 * 3600);
+              seconds = seconds % (24 * 3600);
+              int hours = seconds / 3600;
+              seconds = seconds % 3600;
+              int minutes = seconds /  60;
+              seconds = seconds % 60;
+              if ( days ) {
+                return { (String(days) +"d " + String(hours) +"h " + String(minutes) +"m "+ String(seconds) +"s").c_str() };
+              } else if ( hours ) {
+                return { (String(hours) +"h " + String(minutes) +"m "+ String(seconds) +"s").c_str() };
+              } else if ( minutes ) {
+                return { (String(minutes) +"m "+ String(seconds) +"s").c_str() };
+              } else {
+                return { (String(seconds) +"s").c_str() };
+              }
 
-  - name: ${device_name} API uptime
+  - name: API uptime
     id: api_timestamp
     platform: template
     lambda: 'return id(time_provider).now().timestamp;'
@@ -1023,7 +1051,7 @@ sensor:
     accuracy_decimals: 0
     update_interval: never
 
-  - name: ${device_name} Device uptime
+  - name: Device uptime
     id: device_timestamp
     platform: template
     lambda: 'return (id(time_provider).now().timestamp - id(uptime_sec).state);'
@@ -1034,12 +1062,25 @@ sensor:
     update_interval: never
 
   ##### WIFI Signal stregth
-  - name: ${device_name} RSSI
+  - name: RSSI
+    id: wifi_dbm
     platform: wifi_signal
     update_interval: 60s
     on_value:
       - script.execute:
           id: refresh_wifi_icon
+    disabled_by_default: true
+
+  - name: WiFi signal
+    platform: copy
+    source_id: wifi_dbm
+    icon: "mdi:wifi"
+    filters:
+      - lambda: return (-0.0135 * (x * x)) + (-0.2255 * x) + 100;
+    accuracy_decimals: 0
+    unit_of_measurement: '%'
+    device_class: power_factor
+    entity_category: diagnostic
 
   ##### INTERNAL TEMPERATURE SENSOR, ADC VALUE #####
   - id: ntc_source
@@ -1056,7 +1097,7 @@ sensor:
     resistor: 11.2kOhm
 
   ##### INTERNAL TEMPERATURE SENSOR, resistance to temperature (calculation) #####
-  - name: ${device_name} Temperature
+  - name: Temperature
     platform: ntc
     id: temp_nspanel
     sensor: resistance_sensor
@@ -1072,7 +1113,7 @@ sensor:
         - lambda: id(display_embedded_temp).execute();
 
   ###### Display Brightness GET VALUE FROM NSPanel SLIDER #####
-  - name: ${device_name} brightness Slider
+  - name: brightness Slider
     platform: nextion
     id: brightslider
     variable_name: brightslider
@@ -1086,7 +1127,7 @@ sensor:
             id(timer_reset_all).execute("settings");
 
   ###### Display DIM Brightness GET VALUE FROM NSPanel SLIDER #####
-  - name: ${device_name} dim brightness slider
+  - name: dim brightness slider
     platform: nextion
     id: dimslider
     variable_name: dimslider
@@ -1102,8 +1143,14 @@ sensor:
 ##### START - TEXT SENSOR CONFIGURATION #####
 text_sensor:
 
+  ##### Human readable uptime sensor in ESPHome web server logs #####
+  - name: NSPanel uptime
+    id: nspanel_uptime
+    platform: template
+    internal: true
+
   ##### Current page name #####
-  - name: ${device_name} Current page
+  - name: Current page
     id: current_page
     platform: template
     #platform: nextion
@@ -1126,32 +1173,32 @@ text_sensor:
             id(timer_reset_all).execute(x.c_str());
 
   ##### ESPhome version used to compile the app #####
-  - name: ${device_name} ESPhome Version
+  - name: ESPhome Version
     platform: version
     disabled_by_default: true
 
   - platform: wifi_info
     ip_address:
-      name: ${device_name} IP
+      name: IP
       disabled_by_default: true
       id: ip_address
     ssid:
-      name: ${device_name} SSID
+      name: SSID
       disabled_by_default: true
     bssid:
-      name: ${device_name} BSSID
+      name: BSSID
       disabled_by_default: true
 
-  - name: ${device_name} Notification Label
+  - name: Notification Label
     platform: template
     id: notification_label
 
-  - name: ${device_name} Notification Text
+  - name: Notification Text
     platform: template
     id: notification_text
 
   ##### NSPanel event sensor, the main action sensor - push to HA #####
-  - name: ${device_name} NSPanel event
+  - name: NSPanel event
     platform: nextion
     nextion_id: disp1
     id: disp1_nspanel_event
@@ -1282,7 +1329,7 @@ text_sensor:
               }
 
   ##### NSPanel event - Execute actions from ESPHome - NO push to HA #####
-  - name: ${device_name} NSPanel local event
+  - name: NSPanel local event
     platform: nextion
     nextion_id: disp1
     id: disp1_local_event
@@ -1433,7 +1480,7 @@ text_sensor:
 switch:
 
   ##### Notification unread #####
-  - name: ${device_name} Notification unread
+  - name: Notification unread
     platform: template
     id: notification_unread
     entity_category: config
@@ -1445,7 +1492,7 @@ switch:
       - lambda: id(set_component_color).execute("home.bt_notific", id(home_notify_icon_color_normal), {});
 
   ##### Notification sound #####
-  - name: ${device_name} Notification sound
+  - name: Notification sound
     platform: template
     id: notification_sound
     entity_category: config
@@ -1453,7 +1500,7 @@ switch:
     restore_mode: RESTORE_DEFAULT_OFF
 
   ##### PHYSICAL SWITCH 1 #####
-  - name: ${device_name} Relay 1
+  - name: Relay 1
     platform: gpio
     id: relay_1
     pin:
@@ -1468,7 +1515,7 @@ switch:
         - script.execute:
             id: refresh_relays
   ##### PHYSICAL SWITCH 2 ######
-  - name: ${device_name} Relay 2
+  - name: Relay 2
     platform: gpio
     id: relay_2
     pin:
@@ -1484,7 +1531,7 @@ switch:
             id: refresh_relays
 
   ##### DISPLAY ALWAYS ON #####
-  - name: ${device_name} Screen Power
+  - name: Screen Power
     platform: gpio
     id: screen_power
     entity_category: config
@@ -1495,7 +1542,7 @@ switch:
     internal: true
 
   ##### Relay Local control #####
-  - name: ${device_name} Relay 1 Local
+  - name: Relay 1 Local
     platform: template
     id: relay1_local
     entity_category: config
@@ -1506,7 +1553,7 @@ switch:
       - logger.log: "Relay 1 Local turned On!"
     on_turn_off:
       - logger.log: "Relay 1 Local turned Off!"
-  - name: ${device_name} Relay 2 Local
+  - name: Relay 2 Local
     platform: template
     id: relay2_local
     entity_category: config
@@ -1522,7 +1569,7 @@ switch:
 number:
 
   ##### SCREEN BRIGHTNESS #####
-  - name: ${device_name} Display Brightness
+  - name: Display Brightness
     id: display_brightness
     platform: template
     entity_category: config
@@ -1547,7 +1594,7 @@ number:
               }
 
   ##### SCREEN BRIGHTNESS DIMMED DOWN #####
-  - name: ${device_name} Display Brightness Dimdown
+  - name: Display Brightness Dimdown
     id: display_dim_brightness
     platform: template
     entity_category: config
@@ -1571,7 +1618,7 @@ number:
               }
 
   ##### Temperature Correction #####
-  - name: ${device_name} Temperature Correction
+  - name: Temperature Correction
     platform: template
     id: temperature_correction
     entity_category: config
@@ -1589,7 +1636,7 @@ number:
       - lambda: id(temp_nspanel).publish_state(id(temp_nspanel).raw_state);
 
   ##### Timers settings #####
-  - name: ${device_name} Timeout Page
+  - name: Timeout Page
     platform: template
     id: timeout_page
     entity_category: config
@@ -1603,7 +1650,7 @@ number:
     unit_of_measurement: "s"
     set_action:
       - lambda: id(timer_page).execute(id(current_page).state.c_str(), int(x));
-  - name: ${device_name} Timeout Dimming
+  - name: Timeout Dimming
     platform: template
     id: timeout_dim
     entity_category: config
@@ -1617,7 +1664,7 @@ number:
     unit_of_measurement: "s"
     set_action:
       - lambda: id(timer_dim).execute(id(current_page).state.c_str(), int(x));
-  - name: ${device_name} Timeout Sleep
+  - name: Timeout Sleep
     platform: template
     id: timeout_sleep
     entity_category: config
@@ -1637,7 +1684,7 @@ number:
 ##### START - SELECT CONFIGURATION #####
 select:
   - id: wakeup_page_name
-    name: ${device_name} Wake-up page
+    name: Wake-up page
     platform: template
     options:
       - home
