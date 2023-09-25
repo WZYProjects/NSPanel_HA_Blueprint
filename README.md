@@ -1,4 +1,11 @@
 # NSPanel Custom with HA Blueprint
+### Modified fork!
+1. Using friendly_name
+2. Extra uptime sensor, human readable in the ESPHome web server logs
+3. Extra WiFi signal strength percentage sensor
+4. Extra ESP32 chip temperature sensor
+___
+# NSPanel Custom with HA Blueprint
 
 *You use our NSPanel version and are satisfied with it? Then we would be very happy about a donation to support our project.*
 
